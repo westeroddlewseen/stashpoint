@@ -1,53 +1,47 @@
+"""Main CLI entry point for stashpoint."""
+
 import click
-from stashpoint.storage import save_stash, load_stash, list_stashes, delete_stash
+from stashpoint.storage import save_stash, load_stash, delete_stash, list_stashes
+from stashpoint.export import export_variables
+from stashpoint.cli_export import export_cmd
+from stashpoint.cli_diff import diff_cmd
+from stashpoint.cli_merge import merge_cmd
+from stashpoint.cli_template import template_cmd
 
 
 @click.group()
 def cli():
-    """Stashpoint — save and restore named sets of environment variables."""
-    pass
+    """stashpoint — save and restore named sets of environment variables."""
 
 
-@cli.command("save")
+@cli.command()
 @click.argument("name")
-@click.option("--var", "-v", multiple=True, metavar="KEY=VALUE",
-              help="Environment variable to stash (KEY=VALUE). Can be repeated.")
-def save(name, var):
+@click.argument("variables", nargs=-1)
+def save(name, variables):
     """Save a named stash of environment variables."""
-    if not var:
-        raise click.UsageError("Provide at least one variable with -v KEY=VALUE")
-
-    env_vars = {}
-    for item in var:
-        if "=" not in item:
-            raise click.BadParameter(f"Invalid format '{item}', expected KEY=VALUE")
-        key, _, value = item.partition("=")
-        env_vars[key.strip()] = value.strip()
-
-    save_stash(name, env_vars)
-    click.echo(f"Stash '{name}' saved with {len(env_vars)} variable(s).")
+    if not variables:
+        raise click.ClickException("No variables provided.")
+    parsed = {}
+    for var in variables:
+        if "=" not in var:
+            raise click.ClickException(f"Invalid variable format: '{var}'. Use KEY=VALUE.")
+        key, _, value = var.partition("=")
+        parsed[key.strip()] = value.strip()
+    save_stash(name, parsed)
+    click.echo(f"Stash '{name}' saved with {len(parsed)} variable(s).")
 
 
-@cli.command("load")
+@cli.command()
 @click.argument("name")
-@click.option("--shell", default="bash", show_default=True,
-              type=click.Choice(["bash", "fish", "json"]),
-              help="Output format for the environment variables.")
+@click.option("--shell", default="bash",
+              type=click.Choice(["bash", "fish", "powershell", "dotenv"]),
+              help="Output format.")
 def load(name, shell):
-    """Print export commands for a named stash."""
-    env_vars = load_stash(name)
-    if env_vars is None:
+    """Load a stash and print export statements."""
+    variables = load_stash(name)
+    if variables is None:
         raise click.ClickException(f"Stash '{name}' not found.")
-
-    if shell == "json":
-        import json
-        click.echo(json.dumps(env_vars, indent=2))
-    elif shell == "fish":
-        for key, value in env_vars.items():
-            click.echo(f"set -x {key} '{value}';")
-    else:
-        for key, value in env_vars.items():
-            click.echo(f"export {key}='{value}'")
+    click.echo(export_variables(variables, shell))
 
 
 @cli.command("list")
@@ -55,22 +49,24 @@ def list_cmd():
     """List all saved stashes."""
     stashes = list_stashes()
     if not stashes:
-        click.echo("No stashes saved yet.")
+        click.echo("No stashes saved.")
         return
-    for name in sorted(stashes):
+    click.echo("Saved stashes:")
+    for name in stashes:
         click.echo(f"  {name}")
 
 
-@cli.command("delete")
+@cli.command()
 @click.argument("name")
-@click.confirmation_option(prompt="Are you sure you want to delete this stash?")
 def delete(name):
     """Delete a named stash."""
-    removed = delete_stash(name)
-    if not removed:
+    deleted = delete_stash(name)
+    if not deleted:
         raise click.ClickException(f"Stash '{name}' not found.")
     click.echo(f"Stash '{name}' deleted.")
 
 
-if __name__ == "__main__":
-    cli()
+cli.add_command(export_cmd, "export")
+cli.add_command(diff_cmd, "diff")
+cli.add_command(merge_cmd, "merge")
+cli.add_command(template_cmd, "template")
