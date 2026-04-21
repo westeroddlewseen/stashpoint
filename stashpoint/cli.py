@@ -66,6 +66,20 @@ def delete(name):
     click.echo(f"Stash '{name}' deleted.")
 
 
+@cli.command()
+@click.argument("name")
+def show(name):
+    """Show the variables stored in a named stash."""
+    variables = load_stash(name)
+    if variables is None:
+        raise click.ClickException(f"Stash '{name}' not found.")
+    if not variables:
+        click.echo(f"Stash '{name}' is empty.")
+        return
+    for key, value in sorted(variables.items()):
+        click.echo(f"{key}={value}")
+
+
 cli.add_command(export_cmd)
 cli.add_command(diff_cmd)
 cli.add_command(merge_cmd)
