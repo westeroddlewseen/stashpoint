@@ -35,8 +35,11 @@ def create_cmd(name, stashes, overwrite):
 
 @profile_cmd.command(name="delete")
 @click.argument("name")
-def delete_cmd(name):
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+def delete_cmd(name, yes):
     """Delete a profile by name."""
+    if not yes:
+        click.confirm(f"Are you sure you want to delete profile '{name}'?", abort=True)
     try:
         delete_profile(name)
         click.echo(f"Profile '{name}' deleted.")
