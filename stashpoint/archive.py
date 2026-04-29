@@ -73,3 +73,26 @@ def restore_archive(path: str, overwrite: bool = False) -> Dict:
 
     save_stashes(existing)
     return {"restored": restored, "skipped": skipped}
+
+
+def list_archive(path: str) -> Dict:
+    """Inspect a stashpoint ZIP archive without importing anything.
+
+    Returns a dict with the archive path and the list of stash names
+    stored inside it.  Raises ArchiveError if the file is missing or
+    is not a valid stashpoint archive.
+    """
+    src = Path(path)
+    if not src.exists():
+        raise ArchiveError(f"Archive not found: {path}")
+
+    try:
+        with zipfile.ZipFile(src, "r") as zf:
+            names_in_zip = zf.namelist()
+            if ARCHIVE_MANIFEST not in names_in_zip or STASHES_FILE not in names_in_zip:
+                raise ArchiveError("Not a valid stashpoint archive.")
+            manifest = json.loads(zf.read(ARCHIVE_MANIFEST))
+    except zipfile.BadZipFile as exc:
+        raise ArchiveError(f"Cannot read archive: {exc}") from exc
+
+    return {"path": str(src), "stashes": manifest.get("stashes", [])}
